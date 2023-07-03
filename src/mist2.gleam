@@ -77,16 +77,16 @@ pub fn new(handler: fn(Request(in)) -> Response(out)) -> Builder(in, out) {
   )
 }
 
-pub fn with_port(builder: Builder(in, out), port: Int) -> Builder(in, out) {
+pub fn port(builder: Builder(in, out), port: Int) -> Builder(in, out) {
   Builder(..builder, port: port)
 }
 
-pub fn with_binary_body(
+pub fn read_request_body(
   builder: Builder(BitString, out),
-  max_body_limit max_body_limit: Int,
+  bytes_limit bytes_limit: Int,
 ) -> Builder(RequestHandle, out) {
   let handler = fn(request) {
-    case read_body(request, max_body_limit) {
+    case read_body(request, bytes_limit) {
       Ok(request) -> builder.handler(request)
       Error(_) -> todo as "What should the error behaviour should be?"
     }
