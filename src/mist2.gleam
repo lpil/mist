@@ -19,6 +19,9 @@ import glisten
 //
 
 /// A handle to a request that can be used to read the request body.
+/// This also services as a place where we can store additional information
+/// about the request, along with anything we'd need to upgrade to serve
+/// websockets.
 pub type Connection
 
 /// The error for when the request body cannot be decoded.
@@ -193,7 +196,13 @@ pub fn send_frame(connection: WebsocketConnection, frame: BitString) -> Nil {
   todo
 }
 
-// This never returns
+// This idea here is that this never returns, instead it enters into a new
+// websocket loop and then terminates the process once done.
+// This would give us a way to have multiple different websocket handlers for
+// one HTTP service as the state paremeter doesn't need to be in the type of the
+// request->response handler.
+// It would require `actor.become` to be implemented I think? So a process can
+// directly enter the actor receive loop.
 pub fn upgrade(builder: WebSocketBuilder(state, message)) -> Response(anything) {
   todo
 }
