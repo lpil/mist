@@ -8,6 +8,8 @@ import gleam/iterator.{Iterator}
 import gleam/http/request.{Request}
 import gleam/http/response.{Response}
 import gleam/erlang/process.{Subject}
+import gleam/otp/actor
+import gleam/option.{None, Option, Some}
 import gleam/int
 import gleam/io
 import glisten
@@ -17,14 +19,14 @@ import glisten
 //
 
 /// A handle to a request that can be used to read the request body.
-pub type RequestHandle
+pub type Connection
 
 /// The error for when the request body cannot be decoded.
 /// This could live in a separate public module.
 pub type ReadError
 
 pub fn read_body(
-  request: Request(RequestHandle),
+  request: Request(Connection),
   max_body_limit _max_body_limit: Int,
 ) -> Result(Request(BitString), ReadError) {
   request
@@ -84,7 +86,7 @@ pub fn port(builder: Builder(in, out), port: Int) -> Builder(in, out) {
 pub fn read_request_body(
   builder: Builder(BitString, out),
   bytes_limit bytes_limit: Int,
-) -> Builder(RequestHandle, out) {
+) -> Builder(Connection, out) {
   let handler = fn(request) {
     case read_body(request, bytes_limit) {
       Ok(request) -> builder.handler(request)
@@ -108,7 +110,7 @@ pub fn after_start(
 // A subject is returned so that the server can be interacted with, and also so
 // we can add it to a supervision tree.
 pub fn start_http(
-  _builder: Builder(RequestHandle, ResponseData),
+  _builder: Builder(Connection, ResponseData),
 ) -> Result(Subject(ServerMessage), glisten.StartError) {
   todo
 }
@@ -116,10 +118,83 @@ pub fn start_http(
 // A subject is returned so that the server can be interacted with, and also so
 // we can add it to a supervision tree.
 pub fn start_https(
-  _builder: Builder(RequestHandle, ResponseData),
+  _builder: Builder(Connection, ResponseData),
   certfile _certfile: String,
   keyfile _keyfile: String,
 ) -> Result(Subject(ServerMessage), glisten.StartError) {
+  todo
+}
+
+//
+// === Websockets ===
+//
+
+pub type WebsocketConnection
+
+pub type WebsocketMessage(custom) {
+  /// New message from the client
+  Frame(BitString)
+  /// Client disconnected
+  Closed
+  /// Server is shutting down
+  Shutdown
+  /// A custom message from another process
+  Custom(custom)
+}
+
+pub opaque type WebSocketBuilder(state, message) {
+  WebSocketBuilder(
+    request: Request(Connection),
+    state: state,
+    handler: fn(state, WebsocketConnection, WebsocketMessage(message)) ->
+      actor.Next(state),
+    selector: Option(process.Selector(message)),
+  )
+}
+
+pub fn websocket(request: Request(Connection)) -> WebSocketBuilder(Nil, any) {
+  WebSocketBuilder(
+    request: request,
+    state: Nil,
+    handler: fn(_, _, _) { actor.Stop(process.Normal) },
+    selector: None,
+  )
+}
+
+pub fn selecting(
+  builder: WebSocketBuilder(state, message),
+  selector: process.Selector(message),
+) -> WebSocketBuilder(state, message) {
+  WebSocketBuilder(
+    builder.request,
+    builder.state,
+    builder.handler,
+    Some(selector),
+  )
+}
+
+pub fn with_state(
+  builder: WebSocketBuilder(state, any),
+  state: state,
+) -> WebSocketBuilder(state, any) {
+  WebSocketBuilder(builder.request, state, builder.handler, builder.selector)
+}
+
+pub fn on_message(
+  builder: WebSocketBuilder(state, message),
+  handler: fn(state, WebsocketConnection, WebsocketMessage(message)) ->
+    actor.Next(state),
+) -> WebSocketBuilder(state, message) {
+  WebSocketBuilder(builder.request, builder.state, handler, builder.selector)
+}
+
+// This should return an error?
+pub fn send_frame(connection: WebsocketConnection, frame: BitString) -> Nil {
+  todo
+}
+
+// This never returns
+pub fn upgrade(builder: WebSocketBuilder(state, message)) -> Response(anything) {
   todo
 }
 
